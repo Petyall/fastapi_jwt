@@ -5,13 +5,8 @@ class RoleBase(BaseModel):
     name: str
 
 
-class ItemCreate(RoleBase):
-    pass
-
-
-class Item(RoleBase):
+class Role(RoleBase):
     id: int
-    name: int
 
     class Config:
         orm_mode = True

@@ -1,6 +1,7 @@
+from sqlalchemy import select, insert, update
+
 from app.users.models import Users
 from app.database import async_session_maker
-from sqlalchemy import select, insert
 
 
 class UserService():
@@ -16,6 +17,7 @@ class UserService():
             result = await session.execute(query)
             return(result.scalar_one_or_none())
         
+
     # Добавление чего-либо
     @classmethod
     async def add(cls, **data):
@@ -24,6 +26,18 @@ class UserService():
             query = insert(cls.model).values(**data)
             await session.execute(query)
             await session.commit()
+
+
+    # Обновление значений у пользователя
+    @classmethod
+    async def update_user(cls, email, **data):
+        # Создание сессии для работы с БД
+        async with async_session_maker() as session:
+            table = cls.model
+            query = update(table).where(table.email==email).values(**data)
+            await session.execute(query)
+            await session.commit()
+
 
     # Поиск чего-либо по фильтру с проверкой на существование
     @classmethod

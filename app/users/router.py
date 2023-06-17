@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Response
+from datetime import datetime
 
 from app.users.dependences import get_current_user
 from app.users.models import Users
@@ -6,6 +7,8 @@ from app.users.auth import get_password_hash, authenticate_user, create_access_t
 from app.users.services import UserService
 from app.users.schemas import UserCreate
 from app.exceptions import UserAlreadyExistsException, IncorrectEmailOrPasswordException, NotEnoughAuthorityException
+from app.email import send_email_confirmation_email
+
 
 router = APIRouter(
     prefix="/auth",
@@ -26,9 +29,32 @@ async def register_user(user_data: UserCreate):
     # Преобразование пароля в хэшированный
     hashed_password = get_password_hash(user_data.password)
     # Создание пользователя
-    await UserService.add(email=user_data.email, hashed_password=hashed_password)
+    await UserService.add(email=user_data.email, hashed_password=hashed_password, is_confirmed=False)
+    # Отправка ссылки подтверждения пользователю
+    if await send_email_confirmation_email(user_data.email):
+        # Добавление даты отправки ссылки подтверждения в БД
+        await UserService.update_user(email=user_data.email, confirmation_sent=datetime.now())
     # Возврат успешного сообщения
-    return f"Пользователь {user_data.email} успешно зарегистрирован"
+    return f"Для подтверждения пользователя {user_data.email} было отправлено письмо с ссылкой для завершения регистрации"
+
+
+@router.get("/confirm-email")
+async def confirm_email(email: str, uuid: str):
+    """
+    Подтверждение электронной почты
+    """
+    # Получение пользователя из БД
+    user = await UserService.find_one_or_none(uuid=uuid)
+    # Возврат ошибки, если пользователь не найден
+    if not user:
+        return {"message": "Пользователь не найден."}
+    # Возврат ошибки, если пользователь уже подтвержден
+    if user.is_confirmed:
+        return {"message": "Пользователь уже подтвержден."}
+    # Сохранение статуса подтверждения пользователя в БД
+    user = await UserService.update_user(email=email, is_confirmed=True, confirmation_date=datetime.now())
+    # Возврат успешного сообщения
+    return {"message": "Электронный адрес подтвержден."}
 
 
 @router.post("/login")

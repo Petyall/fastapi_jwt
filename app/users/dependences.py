@@ -17,6 +17,16 @@ def get_token(request: Request):
     return token
 
 
+async def get_uuid(email: str):
+    # Попытка найти пользователя в БД
+    user = await UserService.find_one_or_none(email=email)
+    # Возврат ошибки, если пользователя нет
+    if not user:
+        raise UserIsNotPresentException 
+    # Возврат UUID
+    return user.uuid
+
+
 async def get_current_user(token: str = Depends(get_token)):
     # Попытка расшифровать токен
     try:
