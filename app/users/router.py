@@ -32,9 +32,9 @@ async def register_user(user_data: UserCreate):
     # Создание пользователя
     await UserService.add(email=user_data.email, hashed_password=hashed_password, uuid=str(uuid4()), is_confirmed=False)
     # Отправка ссылки подтверждения пользователю
-    if await send_email_confirmation_email(user_data.email):
-        # Добавление даты отправки ссылки подтверждения в БД
-        await UserService.update_user(email=user_data.email, confirmation_sent=datetime.now())
+    await send_email_confirmation_email(user_data.email)
+    # Добавление даты отправки ссылки подтверждения в БД
+    await UserService.update_user(email=user_data.email, confirmation_sent=datetime.now())
     # Возврат успешного сообщения
     return f"Для подтверждения пользователя {user_data.email} было отправлено письмо с ссылкой для завершения регистрации"
 
