@@ -3,7 +3,7 @@ from pydantic import EmailStr
 from email.message import EmailMessage
 
 from app.config import settings
-from app.users.dependences import get_uuid
+from app.users.dependencies import get_uuid
 
 
 async def create_email_confirmation_template(email_to: EmailStr):

@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, status
 from datetime import datetime
 from uuid import uuid4
+from jose import JWTError, jwt
 
-from app.users.dependences import get_current_user
+from app.config import settings
+from app.users.dependencies import get_current_user, check_current_user_and_role, get_refresh_token
 from app.users.models import Users
-from app.users.auth import get_password_hash, authenticate_user, create_access_token
+from app.users.authorization import create_refresh_token, get_password_hash, authenticate_user, create_access_token
 from app.users.services import UserService
-from app.users.schemas import UserCreate
-from app.exceptions import UserAlreadyExistsException, IncorrectEmailOrPasswordException, NotEnoughAuthorityException
+from app.users.schemas import UserCreate, UserLogin
+from app.exceptions import IncorrectFormatTokenException, UserAlreadyExistsException, UserIsNotPresentException, UserNotFoundException, UserAlreadyConfirmedException, IncorrectEmailOrPasswordException
 from app.email import send_email_confirmation_email
-
 
 router = APIRouter(
     prefix="/auth",
@@ -17,110 +18,124 @@ router = APIRouter(
 )
 
 
-@router.post("/register")
-async def register_user(user_data: UserCreate):
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register_user(user_data: UserCreate) -> dict:
     """
     Регистрация пользователя
     """
-    # Проверка существования пользователя
     existing_user = await UserService.find_one_or_none(email=user_data.email)
-    # Возврат ошибки, если такой пользователь уже зарегистрирован
     if existing_user:
         raise UserAlreadyExistsException
-    # Преобразование пароля в хэшированный
+
     hashed_password = get_password_hash(user_data.password)
-    # Создание пользователя
-    await UserService.add(email=user_data.email, hashed_password=hashed_password, uuid=str(uuid4()), is_confirmed=False)
-    # Отправка ссылки подтверждения пользователю
-    await send_email_confirmation_email(user_data.email)
-    # Добавление даты отправки ссылки подтверждения в БД
+    await UserService.add(
+        email=user_data.email,
+        hashed_password=hashed_password,
+        uuid=str(uuid4()),
+        is_confirmed=False
+    )
+
+    # await send_email_confirmation_email(user_data.email)
     await UserService.update_user(email=user_data.email, confirmation_sent=datetime.now())
-    # Возврат успешного сообщения
-    return f"Для подтверждения пользователя {user_data.email} было отправлено письмо с ссылкой для завершения регистрации"
+    
+    return {"message": f"Для подтверждения пользователя {user_data.email} было отправлено письмо с ссылкой для завершения регистрации"}
 
 
-@router.get("/confirm-email")
-async def confirm_email(email: str, uuid: str):
+@router.get("/confirm-email", status_code=status.HTTP_200_OK)
+async def confirm_email(email: str, uuid: str) -> dict:
     """
     Подтверждение электронной почты
     """
-    # Получение пользователя из БД
-    user = await UserService.find_one_or_none(uuid=uuid)
-    # Возврат ошибки, если пользователь не найден
+    user = await UserService.find_one_or_none(email=email, uuid=uuid)
     if not user:
-        return {"message": "Пользователь не найден."}
-    # Возврат ошибки, если пользователь уже подтвержден
+        raise UserNotFoundException
+
     if user.is_confirmed:
-        return {"message": "Пользователь уже подтвержден."}
-    # Сохранение статуса подтверждения пользователя в БД
+        raise UserAlreadyConfirmedException
+
     user = await UserService.update_user(email=email, is_confirmed=True, confirmation_date=datetime.now())
-    # Возврат успешного сообщения
     return {"message": "Электронный адрес подтвержден."}
 
 
-@router.post("/login")
-async def login_user(response: Response, user_data: UserCreate):
+@router.post("/login", status_code=status.HTTP_200_OK)
+async def login_user(response: Response, user_data: UserLogin) -> dict:
     """
     Авторизация пользователя
     """
-    # Попытка авторизации пользователя
     user = await authenticate_user(user_data.email, user_data.password)
-    # Возврат ошибки, если пользователь не зарегистрирован или не подошел пароль
     if not user:
         raise IncorrectEmailOrPasswordException
-    # Создание и передача токена в cookie 
+
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True
+    )
+
+    return {"message": f"Пользователь {user_data.email} успешно авторизован"}
+
+
+@router.post("/refresh-token", status_code=status.HTTP_200_OK)
+async def refresh_token(response: Response, refresh_token: str = Depends(get_refresh_token)) -> dict:
+    try:
+        payload = jwt.decode(refresh_token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except JWTError:
+        raise IncorrectFormatTokenException
+
+    user_id: str = payload.get("sub")
+    if not user_id:
+        raise UserIsNotPresentException
+
+    user = await UserService.find_by_id(int(user_id))
+    if not user:
+        raise UserIsNotPresentException
+
     access_token = create_access_token({"sub": str(user.id)})
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True
     )
-    # Возврат успешного сообщения
-    return f"Пользователь {user_data.email} успешно авторизован"
+    return {"message": "Access токен успешно обновлен."}
 
 
-@router.post("/logout")
-async def logout_user(response: Response):
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout_user(response: Response) -> dict:
     """
     Выход пользователя
     """
-    # Удаление токена из cookie
     response.delete_cookie("access_token")
-    return "До свидания!"
+    response.delete_cookie("refresh_token")
+    return {"message": "До свидания!"}
 
 
-@router.get("/me")
+@router.get("/me", status_code=status.HTTP_200_OK)
 async def read_users_me(current_user: Users = Depends(get_current_user)):
     """
     Получение информации о пользователе
     """
-    return(current_user)
+    return current_user
 
 
-@router.get("/all")
-async def read_users_all(current_user: Users = Depends(get_current_user)):
+@router.get("/all", status_code=status.HTTP_200_OK)
+async def read_users_all(current_user: Users = Depends(check_current_user_and_role)):
     """
     Получение информации обо всех пользователях
     """
-    # Проверка роли пользователя
-    if current_user.role_id == 2:
-        # Возврат списка пользователей
-        return await UserService.find_all()
-    # Возврат ошибки, если пользователь не админ
-    else:
-        raise NotEnoughAuthorityException
+    return await UserService.find_all()
 
 
-@router.get("/id/{user_id}")
-async def read_users_id(user_id: int, current_user: Users = Depends(get_current_user)):
+@router.get("/id/{user_id}", status_code=status.HTTP_200_OK)
+async def read_users_id(user_id: int, current_user: Users = Depends(check_current_user_and_role)):
     """
     Получение информации о пользователе по id
     """
-    # Проверка роли пользователя
-    if current_user.role_id == 2:
-        # Возврат конкретного пользователя
-        return await UserService.find_one_or_none(id=user_id)
-    # Возврат ошибки, если пользователь не админ
-    else:
-        raise NotEnoughAuthorityException
-    
+    return await UserService.find_one_or_none(id=user_id)

@@ -16,6 +16,15 @@ class UserAlreadyExistsException(ProjectException):
     status_code=status.HTTP_409_CONFLICT
     detail="Пользователь уже существует"
 
+class UserNotFoundException(ProjectException):
+    status_code=status.HTTP_404_NOT_FOUND
+    detail="Пользователь не найден"
+
+
+class UserAlreadyConfirmedException(ProjectException):
+    status_code=status.HTTP_409_CONFLICT
+    detail="Пользователь уже подтвержден"
+
 
 class UserIsNotPresentException(ProjectException):
     status_code=status.HTTP_401_UNAUTHORIZED

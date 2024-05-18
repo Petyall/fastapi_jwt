@@ -18,14 +18,15 @@ class Settings(BaseSettings):
     # Все переменные необходимо хранить в файле .env,
     # но так как это пример, они останутся здесь, кроме
     # логина и пароля от почты
-    SMTP_HOST:str
-    SMTP_PORT:int
-    SMTP_USER:str
-    SMTP_PASS:str
+    # SMTP_HOST:str
+    # SMTP_PORT:int
+    # SMTP_USER:str
+    # SMTP_PASS:str
 
     SECRET_KEY = 'my_secret_key'
+    REFRESH_SECRET_KEY = 'my_refresh_secret_key'
     ALGORITHM = 'HS256'
-    ACCESS_TOKEN_EXPIRE_MINUTES = 30
+    # ACCESS_TOKEN_EXPIRE_MINUTES = 1
     APP_ORIGIN='http://127.0.0.1:8000/'
 
     
