@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Response, status
 from datetime import datetime
 from uuid import uuid4
 from jose import JWTError, jwt
+from pydantic import EmailStr
 
 from app.config import settings
 from app.users.dependencies import get_current_user, check_current_user_and_role, get_refresh_token
@@ -41,7 +42,7 @@ async def register_user(user_data: UserCreate) -> dict:
     return {"message": f"Для подтверждения пользователя {user_data.email} было отправлено письмо с ссылкой для завершения регистрации"}
 
 
-@router.get("/confirm-email", status_code=status.HTTP_200_OK)
+@router.get("/confirm_email", status_code=status.HTTP_200_OK)
 async def confirm_email(email: str, uuid: str) -> dict:
     """
     Подтверждение электронной почты
@@ -83,7 +84,7 @@ async def login_user(response: Response, user_data: UserLogin) -> dict:
     return {"message": f"Пользователь {user_data.email} успешно авторизован"}
 
 
-@router.post("/refresh-token", status_code=status.HTTP_200_OK)
+@router.post("/refresh_token", status_code=status.HTTP_200_OK)
 async def refresh_token(response: Response, refresh_token: str = Depends(get_refresh_token)) -> dict:
     try:
         payload = jwt.decode(refresh_token, settings.REFRESH_SECRET_KEY, algorithms=[settings.ALGORITHM])
