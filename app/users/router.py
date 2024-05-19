@@ -7,9 +7,9 @@ from pydantic import EmailStr
 from app.config import settings
 from app.users.dependencies import get_current_user, check_current_user_and_role, get_refresh_token
 from app.users.models import Users
-from app.users.authorization import create_refresh_token, get_password_hash, authenticate_user, create_access_token
+from app.users.authorization import create_refresh_token, get_password_hash, authenticate_user, create_access_token, verify_password
 from app.users.services import UserService
-from app.users.schemas import UserCreate, UserLogin
+from app.users.schemas import UserCreate, UserLogin, UserPasswordChange
 from app.exceptions import IncorrectFormatTokenException, UserAlreadyExistsException, UserIsNotPresentException, UserNotFoundException, UserAlreadyConfirmedException, IncorrectEmailOrPasswordException
 from app.email import send_email_confirmation_email
 
@@ -82,6 +82,24 @@ async def login_user(response: Response, user_data: UserLogin) -> dict:
     )
 
     return {"message": f"Пользователь {user_data.email} успешно авторизован"}
+
+
+@router.post("/password_change", status_code=status.HTTP_200_OK)
+async def password_change(user_data: UserPasswordChange, current_user: Users = Depends(get_current_user)) -> dict:
+    """
+    Смена пароля
+    """
+    user = await UserService.find_one_or_none(email=current_user.email)
+
+    if not user:
+        raise IncorrectEmailOrPasswordException
+    
+    if not verify_password(user_data.current_password, user.hashed_password):
+        raise IncorrectEmailOrPasswordException
+    
+    new_password_hashed = get_password_hash(user_data.new_password)
+    await UserService.update_user(email=current_user.email, hashed_password=new_password_hashed)
+    return {"message": f"Пароль для {current_user.email} успешно изменен"}
 
 
 @router.post("/refresh_token", status_code=status.HTTP_200_OK)
