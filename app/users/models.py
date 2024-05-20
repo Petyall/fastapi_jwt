@@ -1,6 +1,7 @@
 from uuid import uuid4
 from sqlalchemy.orm import relationship
 from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.database import Base
 
@@ -10,11 +11,12 @@ class Users(Base):
     __tablename__ = "users"
 
     # Поля
-    id = Column(Integer, primary_key=True, nullable=False)
+    uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, unique=True, nullable=False)
+    # id = Column(Integer, primary_key=True, nullable=False)
     email = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
     role_id = Column(ForeignKey("roles.id"), default=1)
-    uuid = Column(String())
+    # uuid = Column(String())
     # uuid = Column(String, default=str(uuid4()))
     is_confirmed = Column(Boolean())
     confirmation_sent = Column(DateTime())

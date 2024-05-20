@@ -1,18 +1,16 @@
-from pydantic import BaseSettings
+from pydantic import BaseSettings, root_validator
 
 class Settings(BaseSettings):
-    # Если использовать PostgreSQL, то в файле .env нужно 
-    # добавить переменные, а затем сделать ссылку до БД
-    # DB_HOST:str
-    # DB_PORT:int
-    # DB_USER:str
-    # DB_PASS:str
-    # DB_NAME:str
+    DB_HOST:str
+    DB_PORT:int
+    DB_USER:str
+    DB_PASS:str
+    DB_NAME:str
 
-    # @root_validator
-    # def get_database_url(cls, v):
-    #     v["DATABASE_URL"] = f"postgresql+asyncpg://{v['DB_USER']}:{v['DB_PASS']}@{v['DB_HOST']}:{v['DB_PORT']}/{v['DB_NAME']}"
-    #     return v
+    @root_validator
+    def get_database_url(cls, v):
+        v["DATABASE_URL"] = f"postgresql+asyncpg://{v['DB_USER']}:{v['DB_PASS']}@{v['DB_HOST']}:{v['DB_PORT']}/{v['DB_NAME']}"
+        return v
 
 
     # Все переменные необходимо хранить в файле .env,
