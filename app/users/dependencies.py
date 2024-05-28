@@ -35,7 +35,7 @@ async def get_uuid(email: str) -> str:
     user = await UserService.find_one_or_none(email=email)
     if not user:
         raise UserIsNotPresentException 
-    return user.uuid
+    return user.id
 
 
 async def get_current_user(token: str = Depends(get_token)) -> Users:
@@ -55,7 +55,7 @@ async def get_current_user(token: str = Depends(get_token)) -> Users:
     if not user_id:
         raise UserIsNotPresentException 
 
-    user = await UserService.find_by_id(int(user_id))
+    user = await UserService.find_by_id(user_id)
     if not user:
         raise UserIsNotPresentException  
 

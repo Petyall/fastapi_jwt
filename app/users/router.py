@@ -8,7 +8,7 @@ from app.config import settings
 from app.users.dependencies import get_current_user, check_current_user_and_role, get_refresh_token
 from app.users.models import Users
 from app.users.authorization import create_refresh_token, get_password_hash, authenticate_user, create_access_token, verify_password
-from app.users.services import UserService
+from app.users.services import UserService, RoleService
 from app.users.schemas import UserCreate, UserLogin, UserPasswordChange
 from app.exceptions import IncorrectFormatTokenException, UserAlreadyExistsException, UserIsNotPresentException, UserNotFoundException, UserAlreadyConfirmedException, IncorrectEmailOrPasswordException
 from app.email import send_email_confirmation_email
@@ -32,7 +32,7 @@ async def register_user(user_data: UserCreate) -> dict:
     await UserService.add(
         email=user_data.email,
         hashed_password=hashed_password,
-        uuid=str(uuid4()),
+        # uuid=str(uuid4()),
         is_confirmed=False
     )
 
@@ -47,7 +47,7 @@ async def confirm_email(email: str, uuid: str) -> dict:
     """
     Подтверждение электронной почты
     """
-    user = await UserService.find_one_or_none(email=email, uuid=uuid)
+    user = await UserService.find_one_or_none(email=email, id=uuid)
     if not user:
         raise UserNotFoundException
 
@@ -113,7 +113,7 @@ async def refresh_token(response: Response, refresh_token: str = Depends(get_ref
     if not user_id:
         raise UserIsNotPresentException
 
-    user = await UserService.find_by_id(int(user_id))
+    user = await UserService.find_by_id(user_id)
     if not user:
         raise UserIsNotPresentException
 
@@ -158,3 +158,8 @@ async def read_users_id(user_id: int, current_user: Users = Depends(check_curren
     Получение информации о пользователе по id
     """
     return await UserService.find_one_or_none(id=user_id)
+
+
+@router.get("/add_role", status_code=status.HTTP_200_OK)
+async def add_role(name: str):
+    return await RoleService.add(name=name)
