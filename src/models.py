@@ -3,7 +3,6 @@ from sqlalchemy import String, Date, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.database import Base
 
-
 class Role(Base):
     __tablename__ = "roles"
 
@@ -16,14 +15,11 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     password: Mapped[str] = mapped_column(String(512))
     registration_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
     last_activity: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    # Поля, которые можно удалить, в зависимости от нужды проекта
     first_name: Mapped[str] = mapped_column(String(100), nullable=True)
     last_name: Mapped[str] = mapped_column(String(100), nullable=True)
     paternal_name: Mapped[str] = mapped_column(String(100), nullable=True)
@@ -35,3 +31,18 @@ class User(Base):
 
     role_title: Mapped[str] = mapped_column(ForeignKey("roles.title"))
     role: Mapped["Role"] = relationship(back_populates="users")
+
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    jti: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), ForeignKey("users.email", ondelete="CASCADE"), index=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
+
+    user: Mapped["User"] = relationship(back_populates="refresh_tokens")
+

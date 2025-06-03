@@ -10,7 +10,7 @@ class PasswordValidator:
         self.level = level.lower()
         self.common_passwords_path = Path(common_passwords_path) if common_passwords_path else None
 
-    def validate(self, password: str, email: str = "", username: str = ""):
+    def validate(self, password: str, email: str = ""):
         if self.level == "none":
             return True if password else ["Пароль не может быть пустым"]
 
@@ -21,7 +21,7 @@ class PasswordValidator:
             validation_errors += self._check_characters(password)
 
         if self.level in ("medium", "strong"):
-            validation_errors += self._check_similarity(password, username, email)
+            validation_errors += self._check_similarity(password, email)
             validation_errors += self._check_common_password(password)
 
         if validation_errors:
@@ -58,7 +58,7 @@ class PasswordValidator:
 
         return errors
 
-    def _check_similarity(self, password: str, username: str, email: str):
+    def _check_similarity(self, password: str, email: str):
         errors = []
         password = password.lower()
 
@@ -74,7 +74,7 @@ class PasswordValidator:
                 return f"Пароль слишком похож на {label}"
             return None
 
-        for check_value, label in [(username, "логин"), (email, "email")]:
+        for check_value, label in [(email, "email")]:
             if check_value:
                 msg = is_similar(check_value, label)
                 if msg:
