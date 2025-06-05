@@ -1,13 +1,16 @@
-from src.services import BaseRequests
-from src.models import User, RefreshToken
-from datetime import datetime
-from sqlalchemy import select, update
-from src.models import RefreshToken
-from src.database import async_session_maker
 from uuid import UUID
+from datetime import datetime
+
+from sqlalchemy import update
+
+from src.services import BaseRequests
+from src.models import RefreshToken, User
+from src.database import async_session_maker
+
 
 class UserRequests(BaseRequests):
     model = User
+
 
 class RefreshTokenService(BaseRequests):
 

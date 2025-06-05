@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,12 +23,11 @@ class Settings(BaseSettings):
             return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASS}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         return "sqlite+aiosqlite:///./db.sqlite3"
 
-    JWT_ALGORITHM:str
-    JWT_ACCESS_TOKEN_EXPIRE:int
-    JWT_REFRESH_TOKEN_EXPIRE:int
+    JWT_ALGORITHM: str
+    JWT_ACCESS_TOKEN_EXPIRE: int
+    JWT_REFRESH_TOKEN_EXPIRE: int
     JWT_PRIVATE_KEY_PATH: str
     JWT_PUBLIC_KEY_PATH: str
 
-    ENABLE_ROLES: bool
 
 settings = Settings()

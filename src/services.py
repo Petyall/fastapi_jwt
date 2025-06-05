@@ -78,4 +78,3 @@ class BaseRequests:
             query = select(cls.model).filter(*args, **kwargs)
             result = await session.execute(query)
             return result.scalars().all()
-        

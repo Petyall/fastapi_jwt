@@ -1,11 +1,15 @@
 import jwt
-from datetime import datetime, timedelta
-from pathlib import Path
-from src.config import settings
-from pydantic import EmailStr, ValidationError
+
 from uuid import uuid4
-from src.auth.services import RefreshTokenService
+from pathlib import Path
+from datetime import datetime, timedelta
+
 from fastapi import HTTPException
+from pydantic import EmailStr, ValidationError
+
+from src.auth.services import RefreshTokenService
+from src.config import settings
+
 
 PRIVATE_KEY_PATH = Path(settings.JWT_PRIVATE_KEY_PATH)
 PRIVATE_KEY = PRIVATE_KEY_PATH.read_text()
@@ -39,16 +43,11 @@ class JWTHandler:
         expire = now + expires_delta
         jti = str(uuid4())
 
-        payload = {
-            "sub": str(email),
-            "iat": int(now.timestamp()),
-            "exp": int(expire.timestamp()),
-            "jti": jti
-        }
+        payload = {"sub": str(email), "iat": int(now.timestamp()), "exp": int(expire.timestamp()), "jti": jti}
 
         token = jwt.encode(payload, PRIVATE_KEY, algorithm=ALGORITHM)
         return token, jti, expire
-    
+
     async def decode_token(self, token: str) -> dict:
         try:
             payload = jwt.decode(token, PUBLIC_KEY, algorithms=[ALGORITHM])
@@ -57,5 +56,6 @@ class JWTHandler:
             raise HTTPException(status_code=401, detail="Access-токен просрочен")
         except jwt.InvalidTokenError:
             raise HTTPException(status_code=401, detail="Неверный токен")
+
 
 jwt_handler = JWTHandler()

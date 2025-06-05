@@ -1,17 +1,17 @@
-from fastapi import APIRouter, status, Depends, HTTPException
-from fastapi.responses import JSONResponse
-from src.auth.schemas import UserCreate, UserLogin
-from src.auth.services import UserRequests, RefreshTokenService
-from src.auth.password_handler import PasswordHandler
-from src.auth.validation.password_validator import validator
-from src.auth.jwt_handler import jwt_handler
-from src.auth.dependencies import check_is_current_user_admin, get_refresh_token
 from datetime import datetime
 
-router = APIRouter(
-    prefix="/auth",
-    tags=["Модуль авторизации пользователей"]
-)
+from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from src.auth.jwt_handler import jwt_handler
+from src.auth.schemas import UserCreate, UserLogin
+from src.auth.password_handler import PasswordHandler
+from src.auth.validation.password_validator import validator
+from src.auth.services import RefreshTokenService, UserRequests
+from src.auth.dependencies import get_current_admin_user, get_refresh_token
+
+
+router = APIRouter(prefix="/auth", tags=["Модуль авторизации пользователей"])
 
 @router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def user_registration(user_data: UserCreate) -> dict:
@@ -34,7 +34,7 @@ async def user_registration(user_data: UserCreate) -> dict:
             paternal_name=user_data.paternal_name,
             phone_number=user_data.phone_number,
             birthday=user_data.birthday,
-            role_title="USER"
+            role_title="USER",
         )
     except Exception as e:
         return {"error": str(e)}
@@ -54,29 +54,24 @@ async def user_login(user_data: UserLogin):
 
     response = JSONResponse(content={"message": "Успешный вход", "user": user.email})
 
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="Lax", max_age=18000)
     response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True,
-        samesite="Lax",
-        max_age=5
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="Lax",
-        max_age=60 * 60 * 24 * 15
+        key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="Lax", max_age=60 * 60 * 24 * 15
     )
 
     return response
 
 
-@router.get("/check")
-async def check_admin(user = Depends(check_is_current_user_admin)):
-    return(user)
+@router.post("/logout", response_model=dict)
+async def logout(refresh_token: str = Depends(get_refresh_token)):
+    refresh_payload = await jwt_handler.decode_token(refresh_token)
+
+    await RefreshTokenService.revoke(jti=refresh_payload["jti"], revoked=datetime.now())
+
+    response = JSONResponse(content={"message": "Выход выполнен"})
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
+    return response
 
 
 @router.post("/refresh", response_model=dict)
@@ -98,20 +93,13 @@ async def refresh_token(refresh_token: str = Depends(get_refresh_token)):
     new_refresh_token = await jwt_handler.create_refresh_token(subject=email)
 
     response = JSONResponse(content={"message": "Токены обновлены", "user": email})
+    response.set_cookie(key="access_token", value=new_access_token, httponly=True, secure=True, samesite="Lax", max_age=18000)
     response.set_cookie(
-        key="access_token",
-        value=new_access_token,
-        httponly=True,
-        secure=True,
-        samesite="Lax",
-        max_age=5
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="Lax",
-        max_age=60 * 60 * 24 * 15
+        key="refresh_token", value=new_refresh_token, httponly=True, secure=True, samesite="Lax", max_age=60 * 60 * 24 * 15
     )
     return response
+
+
+@router.get("/check")
+async def check_admin(user=Depends(get_current_admin_user)):
+    return user

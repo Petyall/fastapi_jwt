@@ -1,14 +1,18 @@
 import re
-
 from difflib import SequenceMatcher
 from pathlib import Path
+
 from src.config import settings
 
 
 class PasswordValidator:
-    def __init__(self, level: str = settings.PASSWORD_VALIDATION_LEVEL, common_passwords_path: str = settings.PASSWORDS_COMMON_LIST_PATH):
+    def __init__(
+        self,
+        level: str = settings.PASSWORD_VALIDATION_LEVEL,
+        common_passwords_path: str = settings.PASSWORDS_COMMON_LIST_PATH,
+    ):
         self.level = level.lower()
-        self.common_passwords_path = Path(common_passwords_path) if common_passwords_path else None
+        self.common_passwords_path = (Path(common_passwords_path) if common_passwords_path else None)
 
     def validate(self, password: str, email: str = ""):
         if self.level == "none":
@@ -26,14 +30,14 @@ class PasswordValidator:
 
         if validation_errors:
             return validation_errors
-        
+
         return True
 
     def _check_length(self, password: str):
         min_len = 12
         if self.level == "light":
             min_len = 8
-        
+
         if len(password) < min_len:
             return [f"Пароль должен содержать минимум {min_len} символов"]
 
@@ -64,7 +68,7 @@ class PasswordValidator:
 
         def is_similar(value: str, label: str):
             value = value.lower()
-            part = value.split('@')[0] if '@' in value else value
+            part = value.split("@")[0] if "@" in value else value
 
             if password == part:
                 return f"Пароль не должен совпадать с {label}"
@@ -86,9 +90,10 @@ class PasswordValidator:
         if not self.common_passwords_path or not self.common_passwords_path.exists():
             return []
 
-        with self.common_passwords_path.open(encoding='utf-8') as f:
+        with self.common_passwords_path.open(encoding="utf-8") as f:
             if password in f.read():
                 return ["Пароль слишком распространен"]
         return []
+
 
 validator = PasswordValidator()

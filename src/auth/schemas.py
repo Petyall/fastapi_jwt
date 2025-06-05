@@ -1,5 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field
 from datetime import date
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserBase(BaseModel):
@@ -11,7 +12,7 @@ class UserCreate(UserBase):
     first_name: str = "test"
     last_name: str = "test"
     paternal_name: str = "test"
-    phone_number: str = Field(pattern=r'^\+?\d{10,15}$', default="+79001234567")
+    phone_number: str = Field(pattern=r"^\+?\d{10,15}$", default="+79001234567")
     birthday: date = "2008-08-08"
 
 

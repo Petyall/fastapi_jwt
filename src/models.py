@@ -1,7 +1,10 @@
 from datetime import date, datetime
-from sqlalchemy import String, Date, DateTime, Boolean, ForeignKey
+
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String
+
 from src.database import Base
+
 
 class Role(Base):
     __tablename__ = "roles"
@@ -45,4 +48,3 @@ class RefreshToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now())
 
     user: Mapped["User"] = relationship(back_populates="refresh_tokens")
-
