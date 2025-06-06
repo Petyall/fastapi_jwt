@@ -1,7 +1,7 @@
 from uuid import UUID
 from datetime import datetime
 
-from sqlalchemy import update
+from sqlalchemy import update, select
 
 from src.services import BaseRequests
 from src.models import RefreshToken, User

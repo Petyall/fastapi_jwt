@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import uuid4
 
 from fastapi.responses import JSONResponse
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,9 +10,11 @@ from src.auth.password_handler import PasswordHandler
 from src.auth.validation.password_validator import validator
 from src.auth.services import RefreshTokenService, UserRequests
 from src.auth.dependencies import get_current_admin_user, get_refresh_token
-
+from src.config import settings
+from src.email.email_handler import EmailHandler, email_templates
 
 router = APIRouter(prefix="/auth", tags=["Модуль авторизации пользователей"])
+
 
 @router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def user_registration(user_data: UserCreate) -> dict:
@@ -25,6 +28,15 @@ async def user_registration(user_data: UserCreate) -> dict:
 
     hashed_password = PasswordHandler.hash_password(user_data.password)
 
+    email_confirmed = True
+    confirmation_token = None
+    confirmation_token_created_at = None
+
+    if settings.ENABLE_EMAIL_CONFIRMATION:
+        email_confirmed = False
+        confirmation_token = str(uuid4())
+        confirmation_token_created_at = datetime.now()
+
     try:
         await UserRequests.add(
             email=user_data.email,
@@ -35,9 +47,27 @@ async def user_registration(user_data: UserCreate) -> dict:
             phone_number=user_data.phone_number,
             birthday=user_data.birthday,
             role_title="USER",
+            email_confirmed=email_confirmed,
+            confirmation_token=confirmation_token,
+            confirmation_token_created_at=confirmation_token_created_at,
         )
     except Exception as e:
         return {"error": str(e)}
+
+    if settings.ENABLE_EMAIL_CONFIRMATION:
+        try:
+            template = email_templates.get_template("confirm_email.html")
+            link = f"{settings.FRONTEND_URL}/confirm-email?token={confirmation_token}"
+            html_content = template.render(confirmation_link=link)
+
+            email_service = EmailHandler()
+            await email_service.send_email(
+                to=user_data.email,
+                subject="Подтверждение регистрации",
+                html_content=html_content,
+            )
+        except Exception as e:
+            return {"error": f"Ошибка отправки письма: {str(e)}"}
 
     return {"message": "Пользователь создан успешно"}
 

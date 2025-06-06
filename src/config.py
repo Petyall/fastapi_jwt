@@ -29,5 +29,15 @@ class Settings(BaseSettings):
     JWT_PRIVATE_KEY_PATH: str
     JWT_PUBLIC_KEY_PATH: str
 
+    ENABLE_EMAIL_CONFIRMATION: bool
+    EMAIL_CONFIRM_TOKEN_EXPIRE: int
+    EMAIL_FROM: str
+    SMTP_USERNAME: str
+    SMTP_PASSWORD: str
+    SMTP_HOST: str
+    SMTP_PORT: int
+
+    FRONTEND_URL: str
+
 
 settings = Settings()

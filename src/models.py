@@ -1,7 +1,7 @@
 from datetime import date, datetime
 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text
 
 from src.database import Base
 
@@ -34,6 +34,11 @@ class User(Base):
 
     role_title: Mapped[str] = mapped_column(ForeignKey("roles.title"))
     role: Mapped["Role"] = relationship(back_populates="users")
+
+    email_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    email_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    confirmation_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confirmation_token_created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
