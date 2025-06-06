@@ -42,6 +42,9 @@ class User(Base):
 
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
+    password_reset_token: Mapped[str | None] = mapped_column(String(), nullable=True)
+    password_reset_token_created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"

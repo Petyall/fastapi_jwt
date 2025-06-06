@@ -27,3 +27,11 @@ class UserRead(UserBase):
 
 class UserLogin(UserBase):
     password: str
+
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+class ResetPassword(BaseModel):
+    token: str
+    new_password: str

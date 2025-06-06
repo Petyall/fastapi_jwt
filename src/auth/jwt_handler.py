@@ -32,7 +32,11 @@ class JWTHandler:
         token, jti, expires_at = await self._create_token(subject, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
         await RefreshTokenService.add(jti=jti, email=subject, expires_at=expires_at)
         return token
-
+    
+    async def create_reset_token(self, subject: str) -> str:
+        token, _, _ = await self._create_token(subject, timedelta(minutes=30))
+        return token
+    
     async def _create_token(self, email: str, expires_delta: timedelta) -> tuple[str, str, datetime]:
         try:
             email = EmailStr._validate(email)
