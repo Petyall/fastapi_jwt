@@ -1,6 +1,8 @@
-from pydantic import BaseModel, EmailStr
 from uuid import UUID
+from pydantic import BaseModel, EmailStr
+
 
 class EmailConfirmation(BaseModel):
     email: EmailStr
-    uuid: UUID
+    confirmation_token: UUID
+    

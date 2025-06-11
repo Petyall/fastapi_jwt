@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     JWT_PRIVATE_KEY_PATH: str
     JWT_PUBLIC_KEY_PATH: str
 
+    EMAIL_TEMPLATES: str
     ENABLE_EMAIL_CONFIRMATION: bool
     EMAIL_CONFIRM_TOKEN_EXPIRE: int
     EMAIL_FROM: str
