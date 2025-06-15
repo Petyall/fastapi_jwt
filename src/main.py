@@ -1,9 +1,13 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+
 from src.logs.logger import logger
 from src.exceptions import ProjectException
 from src.auth.router import router as auth_router
 from src.email.router import router as email_router
+from src.limits.limiter import limiter, rate_limit_exceeded_handler
+
 
 app = FastAPI()
 
@@ -25,3 +29,6 @@ async def project_exception_handler(request: Request, exc: ProjectException):
         status_code=exc.status_code,
         content={"error": exc.detail if exc.expose_to_client else "Ошибка на сервере. Попробуйте позже."}
     )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)

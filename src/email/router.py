@@ -1,11 +1,12 @@
 from uuid import uuid4
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Request
 
 from src.models import User
 from src.config import settings
 from src.logs.logger import logger
+from src.limits.limiter import limiter
 from src.auth.services import UserRequests
 from src.auth.dependencies import get_current_user
 from src.email.schemas.responses import MessageResponse
@@ -23,7 +24,8 @@ router = APIRouter(prefix="/email", tags=["Модуль работы с email"])
 
 
 @router.post("/confirm", response_model=MessageResponse, status_code=status.HTTP_200_OK)
-async def confirm_email(data: EmailConfirmationRequest) -> MessageResponse:
+@limiter.limit("5/minute")
+async def confirm_email(request: Request, data: EmailConfirmationRequest) -> MessageResponse:
     user = await UserRequests.find_one_or_none(email=data.email, confirmation_token=str(data.confirmation_token))
     if not user or user.email_confirmed:
         raise InvalidOrExpiredEmailTokenException
@@ -48,7 +50,8 @@ async def confirm_email(data: EmailConfirmationRequest) -> MessageResponse:
 
 
 @router.post("/resend", response_model=MessageResponse, status_code=status.HTTP_200_OK)
-async def resend_confirmation(current_user: User = Depends(get_current_user)) -> MessageResponse:
+@limiter.limit("2/minute")
+async def resend_confirmation(request: Request, current_user: User = Depends(get_current_user)) -> MessageResponse:
     user = await UserRequests.find_one_or_none(email=current_user.email)
 
     if not user:

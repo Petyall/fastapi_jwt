@@ -40,5 +40,7 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str
 
+    ENABLE_RATE_LIMITER: bool
+
 
 settings = Settings()

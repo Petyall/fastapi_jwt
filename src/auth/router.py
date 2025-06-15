@@ -3,10 +3,11 @@ from urllib.parse import quote
 from datetime import datetime, timedelta
 
 from fastapi.responses import JSONResponse
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status, Request
 
 from src.config import settings
 from src.logs.logger import logger
+from src.limits.limiter import limiter
 from src.auth.jwt_handler import jwt_handler
 from src.auth.password_handler import PasswordHandler
 from src.auth.validation.password_validator import validator
@@ -31,7 +32,8 @@ router = APIRouter(prefix="/auth", tags=["Модуль авторизации п
 
 
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
-async def user_registration(user_data: UserCreateRequest, background_tasks: BackgroundTasks) -> MessageResponse:
+@limiter.limit("2/minute")
+async def user_registration(request: Request, user_data: UserCreateRequest, background_tasks: BackgroundTasks) -> MessageResponse:
     check_user_existing = await UserRequests.find_one_or_none(email=user_data.email)
     if check_user_existing:
         raise UserAlreadyExistsException(user_data.email)
@@ -92,7 +94,8 @@ async def user_registration(user_data: UserCreateRequest, background_tasks: Back
 
 
 @router.post("/login", response_model=AuthResponse, status_code=status.HTTP_200_OK)
-async def user_login(user_data: UserLoginRequest) -> AuthResponse:
+@limiter.limit("5/minute")
+async def user_login(request: Request, user_data: UserLoginRequest) -> AuthResponse:
     user = await UserRequests.find_one_or_none(email=user_data.email)
     if not user or not PasswordHandler.verify_password(user_data.password, user.password):
         raise InvalidCredentialsException
@@ -150,7 +153,8 @@ async def logout(refresh_token: str = Depends(get_refresh_token)) -> MessageResp
 
 
 @router.post("/refresh", response_model=RefreshTokenResponse, status_code=status.HTTP_200_OK)
-async def refresh_token(refresh_token: str = Depends(get_refresh_token)) -> RefreshTokenResponse:
+@limiter.limit("10/minute")
+async def refresh_token(request: Request, refresh_token: str = Depends(get_refresh_token)) -> RefreshTokenResponse:
     if not refresh_token:
         raise RefreshTokenNotFoundException
 
@@ -196,7 +200,8 @@ async def refresh_token(refresh_token: str = Depends(get_refresh_token)) -> Refr
 
 
 @router.post("/forgot-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
-async def forgot_password(data: ForgotPasswordRequest, background_tasks: BackgroundTasks) -> MessageResponse:
+@limiter.limit("2/minute")
+async def forgot_password(request: Request, data: ForgotPasswordRequest, background_tasks: BackgroundTasks) -> MessageResponse:
     user = await UserRequests.find_one_or_none(email=data.email)
     if user:
         password_reset_token = await jwt_handler.create_reset_token(subject=user.email)
@@ -222,7 +227,8 @@ async def forgot_password(data: ForgotPasswordRequest, background_tasks: Backgro
 
 
 @router.post("/reset-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
-async def reset_password(data: ResetPasswordRequest) -> MessageResponse:
+@limiter.limit("5/minute")
+async def reset_password(request: Request, data: ResetPasswordRequest) -> MessageResponse:
     payload = await jwt_handler.decode_token(data.token)
     email = payload.get("sub")
     if not email:
