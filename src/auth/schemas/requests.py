@@ -1,13 +1,12 @@
 from datetime import date
-
 from pydantic import BaseModel, EmailStr, Field
 
 
-class UserBase(BaseModel):
+class UserBaseRequest(BaseModel):
     email: EmailStr
 
 
-class UserCreate(UserBase):
+class UserCreateRequest(UserBaseRequest):
     password: str
     first_name: str = "test"
     last_name: str = "test"
@@ -16,22 +15,14 @@ class UserCreate(UserBase):
     birthday: date = "2008-08-08"
 
 
-class UserRead(UserBase):
-    first_name: str
-    last_name: str
-    paternal_name: str
-    phone_number: str
-    birthday: date
-    ban: bool
-
-
-class UserLogin(UserBase):
+class UserLoginRequest(UserBaseRequest):
     password: str
 
 
-class ForgotPassword(BaseModel):
+class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
-class ResetPassword(BaseModel):
+
+class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str

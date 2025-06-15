@@ -1,12 +1,12 @@
 from fastapi import Depends, Request
-
+from src.models import User
 from src.auth.services import UserRequests
 from src.auth.jwt_handler import jwt_handler
 from src.exceptions import (
     AccessTokenNotFoundException,
     InvalidAccessTokenException,
     RefreshTokenNotFoundException,
-    UserHasNoRightsException, 
+    UserHasNoRightsException,
     UserNotFoundException
 )
 
@@ -25,7 +25,7 @@ async def get_refresh_token(request: Request) -> str:
     return refresh_token
 
 
-async def get_current_user(token: str = Depends(get_access_token)):
+async def get_current_user(token: str = Depends(get_access_token)) -> User:
     payload = await jwt_handler.decode_token(token)
     if not payload:
         raise InvalidAccessTokenException
@@ -36,12 +36,12 @@ async def get_current_user(token: str = Depends(get_access_token)):
 
     user = await UserRequests.find_one_or_none(email=email)
     if not user:
-        return UserNotFoundException
+        raise UserNotFoundException
 
     return user
 
 
-async def get_current_admin_user(user=Depends(get_current_user)):
+async def get_current_admin_user(user: User = Depends(get_current_user)) -> User:
     if user.role_title != "ADMIN":
         raise UserHasNoRightsException
     return user

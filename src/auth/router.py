@@ -13,16 +13,16 @@ from src.auth.validation.password_validator import validator
 from src.auth.services import RefreshTokenService, UserRequests
 from src.email.email_handler import email_handler, email_templates
 from src.auth.dependencies import get_current_admin_user, get_refresh_token
-from src.auth.schemas import (ForgotPassword, ResetPassword, UserCreate, UserLogin)
+from src.auth.schemas.responses import MessageResponse, AuthResponse, RefreshTokenResponse
+from src.auth.schemas.requests import UserCreateRequest, UserLoginRequest, ForgotPasswordRequest, ResetPasswordRequest
 from src.exceptions import (
     UserAlreadyExistsException,
-    PasswordValidationErrorException,
-    InternalServerErrorException,
     InvalidCredentialsException,
-    RefreshTokenNotFoundException,
     InvalidRefreshTokenException,
+    InternalServerErrorException,
+    RefreshTokenNotFoundException,
+    PasswordValidationErrorException,
     InvalidPasswordResetTokenException,
-    UserNotFoundException,
     PasswordIdenticalToPreviousException,
 )
 
@@ -30,8 +30,8 @@ from src.exceptions import (
 router = APIRouter(prefix="/auth", tags=["Модуль авторизации пользователей"])
 
 
-@router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
-async def user_registration(user_data: UserCreate, background_tasks: BackgroundTasks) -> dict:
+@router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+async def user_registration(user_data: UserCreateRequest, background_tasks: BackgroundTasks) -> MessageResponse:
     check_user_existing = await UserRequests.find_one_or_none(email=user_data.email)
     if check_user_existing:
         raise UserAlreadyExistsException(user_data.email)
@@ -88,11 +88,11 @@ async def user_registration(user_data: UserCreate, background_tasks: BackgroundT
 
         message += " В течение 24 часов, вам придет сообщение на почту для подтверждения регистрации."
 
-    return {"message": message}
+    return MessageResponse(message=message)
 
 
-@router.post("/login")
-async def user_login(user_data: UserLogin):
+@router.post("/login", response_model=AuthResponse, status_code=status.HTTP_200_OK)
+async def user_login(user_data: UserLoginRequest) -> AuthResponse:
     user = await UserRequests.find_one_or_none(email=user_data.email)
     if not user or not PasswordHandler.verify_password(user_data.password, user.password):
         raise InvalidCredentialsException
@@ -100,7 +100,10 @@ async def user_login(user_data: UserLogin):
     access_token = await jwt_handler.create_access_token(subject=user.email)
     refresh_token = await jwt_handler.create_refresh_token(subject=user.email)
 
-    response = JSONResponse(content={"message": "Успешный вход", "user": user.email})
+    response = JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=AuthResponse(message="Успешный вход", user=user.email).dict()
+    )
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -121,8 +124,8 @@ async def user_login(user_data: UserLogin):
     return response
 
 
-@router.post("/logout", response_model=dict)
-async def logout(refresh_token: str = Depends(get_refresh_token)):
+@router.post("/logout", response_model=MessageResponse, status_code=status.HTTP_200_OK)
+async def logout(refresh_token: str = Depends(get_refresh_token)) -> MessageResponse:
     if not refresh_token:
         raise RefreshTokenNotFoundException
 
@@ -136,15 +139,18 @@ async def logout(refresh_token: str = Depends(get_refresh_token)):
     if not refresh_token_check:
         logger.error(f"Не найден Refresh-токен {jti} для пользователя {email}")
 
-    response = JSONResponse(content={"message": "Выход выполнен"})
+    response = JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=MessageResponse(message="Выход выполнен").dict()
+    )
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
 
     return response
 
 
-@router.post("/refresh", response_model=dict)
-async def refresh_token(refresh_token: str = Depends(get_refresh_token)):
+@router.post("/refresh", response_model=RefreshTokenResponse, status_code=status.HTTP_200_OK)
+async def refresh_token(refresh_token: str = Depends(get_refresh_token)) -> RefreshTokenResponse:
     if not refresh_token:
         raise RefreshTokenNotFoundException
 
@@ -165,7 +171,10 @@ async def refresh_token(refresh_token: str = Depends(get_refresh_token)):
     new_access_token = await jwt_handler.create_access_token(subject=email)
     new_refresh_token = await jwt_handler.create_refresh_token(subject=email)
 
-    response = JSONResponse(content={"message": "Токены обновлены", "user": email})
+    response = JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=RefreshTokenResponse(message="Токены обновлены", user=email).dict()
+    )
     response.set_cookie(
         key="access_token",
         value=new_access_token,
@@ -186,14 +195,16 @@ async def refresh_token(refresh_token: str = Depends(get_refresh_token)):
     return response
 
 
-@router.post("/forgot-password")
-async def forgot_password(data: ForgotPassword, background_tasks: BackgroundTasks):
+@router.post("/forgot-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
+async def forgot_password(data: ForgotPasswordRequest, background_tasks: BackgroundTasks) -> MessageResponse:
     user = await UserRequests.find_one_or_none(email=data.email)
     if user:
         password_reset_token = await jwt_handler.create_reset_token(subject=user.email)
 
         await UserRequests.update(
-            id=user.id, password_reset_token=password_reset_token, password_reset_token_created_at=datetime.now()
+            id=user.id,
+            password_reset_token=password_reset_token,
+            password_reset_token_created_at=datetime.now()
         )
 
         async def send_password_reset_email(email: str, token: str):
@@ -207,11 +218,11 @@ async def forgot_password(data: ForgotPassword, background_tasks: BackgroundTask
 
         background_tasks.add_task(send_password_reset_email, user.email, password_reset_token)
 
-    return {"message": "Если пользователь существует, на его email отправлено письмо с инструкцией по сбросу пароля"}
+    return MessageResponse(message="Если пользователь существует, на его email отправлено письмо с инструкцией по сбросу пароля")
 
 
-@router.post("/reset-password", response_model=dict)
-async def reset_password(data: ResetPassword):
+@router.post("/reset-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
+async def reset_password(data: ResetPasswordRequest) -> MessageResponse:
     payload = await jwt_handler.decode_token(data.token)
     email = payload.get("sub")
     if not email:
@@ -219,7 +230,7 @@ async def reset_password(data: ResetPassword):
 
     user = await UserRequests.find_one_or_none(email=email, password_reset_token=data.token)
     if not user:
-        raise UserNotFoundException(email)
+        raise InvalidPasswordResetTokenException
 
     if PasswordHandler.verify_password(data.new_password, user.password):
         raise PasswordIdenticalToPreviousException
@@ -231,7 +242,7 @@ async def reset_password(data: ResetPassword):
     new_hashed = PasswordHandler.hash_password(data.new_password)
     await UserRequests.update(id=user.id, password=new_hashed, password_reset_token=None, password_reset_token_created_at=None)
 
-    return {"message": "Пароль успешно изменён"}
+    return MessageResponse(message="Пароль успешно изменён")
 
 
 @router.get("/check")
