@@ -12,85 +12,107 @@ class ProjectException(HTTPException):
         self.expose_to_client = expose_to_client
         super().__init__(status_code=self.status_code, detail=self.detail)
 
+# --- Ошибки, связанные с пользователями ---
 
 class UserAlreadyExistsException(ProjectException):
     status_code = status.HTTP_409_CONFLICT
 
     def __init__(self, user_email: str):
-        super().__init__(detail=f"Пользователь '{user_email}' уже существует")
+        super().__init__(detail="Пользователь уже зарегистрирован")
 
 
 class UserNotFoundException(ProjectException):
     status_code = status.HTTP_404_NOT_FOUND
 
     def __init__(self, user_email: str):
-        super().__init__(detail=f"Пользователь '{user_email}' не найден")
+        super().__init__(detail="Пользователь не найден")
 
 
 class UserHasNoRightsException(ProjectException):
     status_code = status.HTTP_403_FORBIDDEN
-    detail = "Недостаточно прав"
+    detail = "Доступ запрещён"
 
+# --- Ошибки, связанные с паролем ---
 
 class PasswordValidationErrorException(ProjectException):
     status_code = status.HTTP_400_BAD_REQUEST
 
     def __init__(self, validation_result: str):
-        super().__init__(detail=f"Пароль не соответствует требованиям:\n{validation_result}")
+        super().__init__(detail="Пароль не соответствует требованиям")
 
 
 class PasswordIdenticalToPreviousException(ProjectException):
     status_code = status.HTTP_400_BAD_REQUEST
-    detail = "Новый пароль должен отличаться от предыдущего"
+    detail = "Пароль должен отличаться от предыдущего"
 
+# --- Ошибки, связанные с токенами сброса пароля ---
 
 class InvalidPasswordResetTokenException(ProjectException):
-    status_code = status.HTTP_409_CONFLICT
-    detail = "Токен недействителен"
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Ссылка для сброса пароля недействительна"
 
-
-class InternalServerErrorException(ProjectException):
-    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-
-    def __init__(self, reason: str = "Ошибка на сервере. Попробуйте позже."):
-        super().__init__(detail=reason, expose_to_client=False)
-
+# --- Ошибки, связанные с авторизацией и аутентификацией ---
 
 class InvalidCredentialsException(ProjectException):
     status_code = status.HTTP_401_UNAUTHORIZED
-    detail = "email или пароль введены неправильно"
+    detail = "Неверные учётные данные"
 
 
 class RefreshTokenNotFoundException(ProjectException):
     status_code = status.HTTP_401_UNAUTHORIZED
-    detail = "Refresh-токен не найден"
+    detail = "Токен обновления не предоставлен"
 
 
 class InvalidRefreshTokenException(ProjectException):
     status_code = status.HTTP_401_UNAUTHORIZED
-    detail = "Refresh-токен недействителен"
+    detail = "Недействительный токен обновления"
 
 
 class AccessTokenNotFoundException(ProjectException):
     status_code = status.HTTP_401_UNAUTHORIZED
-    detail = "Access-токен не найден"
+    detail = "Токен доступа не предоставлен"
 
 
 class InvalidAccessTokenException(ProjectException):
     status_code = status.HTTP_401_UNAUTHORIZED
-    detail = "Access-токен недействителен"
+    detail = "Недействительный токен доступа"
 
+
+class InvalidTokenException(ProjectException):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    detail = "Неверный токен"
+
+
+class ExpiredTokenException(ProjectException):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    detail = "Токен просрочен"
+
+
+class InvalidEmailException(ProjectException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Некорректный email"
+
+# --- Ошибки, связанные с подтверждением email ---
 
 class InvalidOrExpiredEmailTokenException(ProjectException):
     status_code = status.HTTP_400_BAD_REQUEST
-    detail = "Ссылка недействительна или устарела"
+    detail = "Ссылка подтверждения недействительна или устарела"
 
 
 class EmailAlreadyConfirmedException(ProjectException):
     status_code = status.HTTP_400_BAD_REQUEST
-    detail = "Вы уже подтвердили свою почту!"
+    detail = "Почта уже подтверждена"
 
 
 class TooEarlyResendException(ProjectException):
     status_code = status.HTTP_429_TOO_MANY_REQUESTS
-    detail="Письмо уже было отправлено недавно. Попробуйте позже"
+    detail = "Слишком частые попытки. Попробуйте позже"
+
+# --- Общие/внутренние ошибки ---
+
+class InternalServerErrorException(ProjectException):
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+
+    def __init__(self, reason: str = "Внутренняя ошибка сервера"):
+        super().__init__(detail=reason, expose_to_client=False)
+    

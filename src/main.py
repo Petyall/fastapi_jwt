@@ -1,7 +1,9 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 from slowapi.errors import RateLimitExceeded
 
+from src.database import engine
 from src.logs.logger import logger
 from src.exceptions import ProjectException
 from src.auth.router import router as auth_router
@@ -9,11 +11,12 @@ from src.email.router import router as email_router
 from src.limits.limiter import limiter, rate_limit_exceeded_handler
 
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await engine.dispose()
 
-@app.get("/")
-async def root():
-    return {"message": "Hello World"}
+app = FastAPI(lifespan=lifespan)
 
 app.include_router(auth_router)
 app.include_router(email_router)

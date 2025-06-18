@@ -8,11 +8,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, status, Request
 from src.config import settings
 from src.logs.logger import logger
 from src.limits.limiter import limiter
-from src.auth.jwt_handler import jwt_handler
-from src.auth.password_handler import PasswordHandler
-from src.auth.validation.password_validator import validator
-from src.auth.services import RefreshTokenService, UserRequests
-from src.email.email_handler import email_handler, email_templates
+from src.auth.constants import UserRole
+from src.auth.utils.jwt_handler import jwt_handler
+from src.auth.utils.cookie_handler import CookieHandler
+from src.auth.utils.password_validator import validator
+from src.auth.utils.password_handler import PasswordHandler
+from src.auth.services import RefreshTokenRepository, UserRepository
+from src.email.utils.email_handler import email_handler
 from src.auth.dependencies import get_current_admin_user, get_refresh_token
 from src.auth.schemas.responses import MessageResponse, AuthResponse, RefreshTokenResponse
 from src.auth.schemas.requests import UserCreateRequest, UserLoginRequest, ForgotPasswordRequest, ResetPasswordRequest
@@ -34,7 +36,7 @@ router = APIRouter(prefix="/auth", tags=["Модуль авторизации п
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("2/minute")
 async def user_registration(request: Request, user_data: UserCreateRequest, background_tasks: BackgroundTasks) -> MessageResponse:
-    check_user_existing = await UserRequests.find_one_or_none(email=user_data.email)
+    check_user_existing = await UserRepository.find_one_or_none(email=user_data.email)
     if check_user_existing:
         raise UserAlreadyExistsException(user_data.email)
 
@@ -54,7 +56,7 @@ async def user_registration(request: Request, user_data: UserCreateRequest, back
         confirmation_token_created_at = datetime.now()
 
     try:
-        await UserRequests.add(
+        await UserRepository.add(
             email=user_data.email,
             password=hashed_password,
             first_name=user_data.first_name,
@@ -62,7 +64,7 @@ async def user_registration(request: Request, user_data: UserCreateRequest, back
             paternal_name=user_data.paternal_name,
             phone_number=user_data.phone_number,
             birthday=user_data.birthday,
-            role_title="USER",
+            role_title=UserRole.USER.value,
             email_confirmed=email_confirmed,
             confirmation_token=confirmation_token,
             confirmation_token_created_at=confirmation_token_created_at,
@@ -76,13 +78,18 @@ async def user_registration(request: Request, user_data: UserCreateRequest, back
     message = f"Пользователь '{user_data.email}' создан успешно"
 
     if settings.ENABLE_EMAIL_CONFIRMATION:
-
         async def send_confirmation_email(email: str, token: str):
             try:
-                template = email_templates.get_template("confirm_email.html")
                 link = f"{settings.FRONTEND_URL}/email/confirm?email={quote(email)}&token={token}"
-                html_content = template.render(confirmation_link=link)
-                await email_handler.send_email(to=email, subject="Подтверждение регистрации", html_content=html_content)
+                html_content = email_handler.render_template(
+                    "confirm_email.html",
+                    {"confirmation_link": link}
+                )
+                await email_handler.send_email(
+                    to=email,
+                    subject="Подтверждение регистрации",
+                    html_content=html_content
+                )
             except Exception as e:
                 logger.error(f"Ошибка при отправке письма подтверждения для {email}: {type(e).__name__}: {e}")
 
@@ -96,7 +103,7 @@ async def user_registration(request: Request, user_data: UserCreateRequest, back
 @router.post("/login", response_model=AuthResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 async def user_login(request: Request, user_data: UserLoginRequest) -> AuthResponse:
-    user = await UserRequests.find_one_or_none(email=user_data.email)
+    user = await UserRepository.find_one_or_none(email=user_data.email)
     if not user or not PasswordHandler.verify_password(user_data.password, user.password):
         raise InvalidCredentialsException
 
@@ -107,22 +114,8 @@ async def user_login(request: Request, user_data: UserLoginRequest) -> AuthRespo
         status_code=status.HTTP_200_OK,
         content=AuthResponse(message="Успешный вход", user=user.email).dict()
     )
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True,
-        samesite="Lax",
-        max_age=settings.JWT_ACCESS_TOKEN_EXPIRE * 60,
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="Lax",
-        max_age=settings.JWT_REFRESH_TOKEN_EXPIRE * 60 * 60 * 24,
-    )
+
+    CookieHandler.set_auth_tokens(response, access_token, refresh_token)
 
     return response
 
@@ -138,7 +131,7 @@ async def logout(refresh_token: str = Depends(get_refresh_token)) -> MessageResp
     if not jti or not email:
         raise InvalidRefreshTokenException
 
-    refresh_token_check = await RefreshTokenService.revoke(jti=jti, revoked=datetime.now())
+    refresh_token_check = await RefreshTokenRepository.revoke(jti=jti, revoked=datetime.now())
     if not refresh_token_check:
         logger.error(f"Не найден Refresh-токен {jti} для пользователя {email}")
 
@@ -164,11 +157,11 @@ async def refresh_token(request: Request, refresh_token: str = Depends(get_refre
     if not jti or not email:
         raise InvalidRefreshTokenException
 
-    token = await RefreshTokenService.find_one_or_none(jti=jti)
+    token = await RefreshTokenRepository.find_one_or_none(jti=jti)
     if not token or token.revoked or datetime.now() - token.created_at > timedelta(days=30):
         raise InvalidRefreshTokenException
 
-    refresh_token_check = await RefreshTokenService.revoke(jti=jti, revoked=datetime.now())
+    refresh_token_check = await RefreshTokenRepository.revoke(jti=jti, revoked=datetime.now())
     if not refresh_token_check:
         logger.error(f"Не найден Refresh-токен {jti} для пользователя {email}")
 
@@ -179,22 +172,8 @@ async def refresh_token(request: Request, refresh_token: str = Depends(get_refre
         status_code=status.HTTP_200_OK,
         content=RefreshTokenResponse(message="Токены обновлены", user=email).dict()
     )
-    response.set_cookie(
-        key="access_token",
-        value=new_access_token,
-        httponly=True,
-        secure=True,
-        samesite="Lax",
-        max_age=settings.JWT_ACCESS_TOKEN_EXPIRE * 60,
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="Lax",
-        max_age=settings.JWT_REFRESH_TOKEN_EXPIRE * 60 * 60 * 24,
-    )
+
+    CookieHandler.set_auth_tokens(response, new_access_token, new_refresh_token)
 
     return response
 
@@ -202,11 +181,11 @@ async def refresh_token(request: Request, refresh_token: str = Depends(get_refre
 @router.post("/forgot-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("2/minute")
 async def forgot_password(request: Request, data: ForgotPasswordRequest, background_tasks: BackgroundTasks) -> MessageResponse:
-    user = await UserRequests.find_one_or_none(email=data.email)
+    user = await UserRepository.find_one_or_none(email=data.email)
     if user:
         password_reset_token = await jwt_handler.create_reset_token(subject=user.email)
 
-        await UserRequests.update(
+        await UserRepository.update(
             id=user.id,
             password_reset_token=password_reset_token,
             password_reset_token_created_at=datetime.now()
@@ -214,9 +193,11 @@ async def forgot_password(request: Request, data: ForgotPasswordRequest, backgro
 
         async def send_password_reset_email(email: str, token: str):
             try:
-                template = email_templates.get_template("reset_password.html")
                 link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
-                html_content = template.render(reset_link=link)
+                html_content = email_handler.render_template(
+                    "reset_password.html",
+                    {"reset_link": link}
+                )
                 await email_handler.send_email(to=email, subject="Сброс пароля", html_content=html_content)
             except Exception as e:
                 logger.error(f"Ошибка при отправке письма подтверждения для {email}: {type(e).__name__}: {e}")
@@ -234,7 +215,7 @@ async def reset_password(request: Request, data: ResetPasswordRequest) -> Messag
     if not email:
         raise InvalidPasswordResetTokenException
 
-    user = await UserRequests.find_one_or_none(email=email, password_reset_token=data.token)
+    user = await UserRepository.find_one_or_none(email=email, password_reset_token=data.token)
     if not user:
         raise InvalidPasswordResetTokenException
 
@@ -246,7 +227,7 @@ async def reset_password(request: Request, data: ResetPasswordRequest) -> Messag
         raise PasswordValidationErrorException(validation_result)
 
     new_hashed = PasswordHandler.hash_password(data.new_password)
-    await UserRequests.update(id=user.id, password=new_hashed, password_reset_token=None, password_reset_token_created_at=None)
+    await UserRepository.update(id=user.id, password=new_hashed, password_reset_token=None, password_reset_token_created_at=None)
 
     return MessageResponse(message="Пароль успешно изменён")
 

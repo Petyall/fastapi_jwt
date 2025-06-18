@@ -1,7 +1,9 @@
 from fastapi import Depends, Request
+
 from src.models import User
-from src.auth.services import UserRequests
-from src.auth.jwt_handler import jwt_handler
+from src.auth.constants import UserRole
+from src.auth.services import UserRepository
+from src.auth.utils.jwt_handler import jwt_handler
 from src.exceptions import (
     AccessTokenNotFoundException,
     InvalidAccessTokenException,
@@ -34,7 +36,7 @@ async def get_current_user(token: str = Depends(get_access_token)) -> User:
     if not email:
         raise InvalidAccessTokenException
 
-    user = await UserRequests.find_one_or_none(email=email)
+    user = await UserRepository.find_one_or_none(email=email)
     if not user:
         raise UserNotFoundException
 
@@ -42,6 +44,6 @@ async def get_current_user(token: str = Depends(get_access_token)) -> User:
 
 
 async def get_current_admin_user(user: User = Depends(get_current_user)) -> User:
-    if user.role_title != "ADMIN":
+    if user.role_title != UserRole.ADMIN.value:
         raise UserHasNoRightsException
     return user
