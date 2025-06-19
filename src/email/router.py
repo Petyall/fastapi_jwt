@@ -14,7 +14,7 @@ from src.email.schemas.requests import EmailConfirmationRequest
 from src.email.utils.email_handler import email_handler
 from src.exceptions import (
     UserNotFoundException,
-    TooEarlyResendException, 
+    TooEarlyResendException,
     EmailAlreadyConfirmedException,
     InvalidOrExpiredEmailTokenException,
 )
@@ -26,6 +26,19 @@ router = APIRouter(prefix="/email", tags=["Модуль работы с email"])
 @router.post("/confirm", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 async def confirm_email(request: Request, data: EmailConfirmationRequest) -> MessageResponse:
+    """
+    Подтверждает email пользователя по предоставленному токену.
+
+    Args:
+        request: HTTP-запрос для контекста лимитера.
+        data: Данные запроса, содержащие email и токен подтверждения.
+
+    Returns:
+        Сообщение об успешном подтверждении email.
+
+    Raises:
+        InvalidOrExpiredEmailTokenException: Если токен недействителен, истёк или пользователь не найден.
+    """
     user = await UserRepository.find_one_or_none(email=data.email, confirmation_token=str(data.confirmation_token))
     if not user or user.email_confirmed:
         raise InvalidOrExpiredEmailTokenException
@@ -52,6 +65,21 @@ async def confirm_email(request: Request, data: EmailConfirmationRequest) -> Mes
 @router.post("/resend", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("2/minute")
 async def resend_confirmation(request: Request, current_user: User = Depends(get_current_user)) -> MessageResponse:
+    """
+    Повторно отправляет письмо для подтверждения email текущему пользователю.
+
+    Args:
+        request: HTTP-запрос для контекста лимитера.
+        current_user: Текущий аутентифицированный пользователь, полученный через зависимость.
+
+    Returns:
+        Сообщение о том, что письмо отправлено повторно (или об ошибке).
+
+    Raises:
+        UserNotFoundException: Если пользователь не найден.
+        EmailAlreadyConfirmedException: Если email уже подтверждён.
+        TooEarlyResendException: Если токен ещё действителен и повторная отправка невозможна.
+    """
     user = await UserRepository.find_one_or_none(email=current_user.email)
 
     if not user:
@@ -61,7 +89,7 @@ async def resend_confirmation(request: Request, current_user: User = Depends(get
         raise EmailAlreadyConfirmedException
 
     created_at = user.confirmation_token_created_at
-    if datetime.now() - created_at < timedelta(hours=settings.EMAIL_CONFIRM_TOKEN_EXPIRE):
+    if created_at and datetime.now() - created_at < timedelta(hours=settings.EMAIL_CONFIRM_TOKEN_EXPIRE):
         raise TooEarlyResendException
 
     new_token = str(uuid4())
@@ -80,4 +108,3 @@ async def resend_confirmation(request: Request, current_user: User = Depends(get
         return MessageResponse(message="Если аккаунт существует, письмо отправлено повторно")
 
     return MessageResponse(message="Если аккаунт существует, письмо отправлено повторно")
-

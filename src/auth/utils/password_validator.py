@@ -6,9 +6,25 @@ from src.config import settings
 
 
 class PasswordValidator:
+    """
+    Класс для валидации паролей на основе заданного уровня строгости.
+
+    Проверяет длину, наличие символов, схожесть с email и использование распространённых паролей.
+    Уровни валидации: none, light, medium, strong.
+    """
     VALID_LEVELS = {"none", "light", "medium", "strong"}
 
     def __init__(self, level: str = settings.PASSWORD_VALIDATION_LEVEL, common_passwords_path: str = settings.PASSWORDS_COMMON_LIST_PATH):
+        """
+        Инициализирует валидатор паролей.
+
+        Args:
+            level: Уровень строгости валидации пароля (none, light, medium, strong).
+            common_passwords_path: Путь к файлу со списком распространённых паролей.
+
+        Raises:
+            ValueError: Если указан недопустимый уровень валидации.
+        """
         self.level = level.lower()
         if self.level not in self.VALID_LEVELS:
             raise ValueError(f"Недопустимый уровень проверки пароля: {self.level}")
@@ -24,7 +40,17 @@ class PasswordValidator:
                 print("/src/validation/password_validator.py - Файл с популярными паролями не найден, инициаилизировано пустое множество...")
                 self._common_passwords = set()
 
-    def validate(self, password: str, email: str = ""):
+    def validate(self, password: str, email: str = "") -> bool | list[str]:
+        """
+        Проверяет пароль на соответствие требованиям выбранного уровня валидации.
+
+        Args:
+            password: Пароль для проверки.
+            email: Email пользователя для проверки схожести (опционально).
+
+        Returns:
+            True, если пароль соответствует требованиям, иначе список ошибок валидации.
+        """
         if self.level == "none":
             return True if password else ["Пароль не может быть пустым"]
 
@@ -40,13 +66,32 @@ class PasswordValidator:
 
         return validation_errors if validation_errors else True
 
-    def _check_length(self, password: str):
+    def _check_length(self, password: str) -> list[str]:
+        """
+        Проверяет минимальную длину пароля в зависимости от уровня валидации.
+
+        Args:
+            password: Пароль для проверки.
+
+        Returns:
+            Список ошибок, если длина пароля недостаточна, иначе пустой список.
+        """
         min_len = 12 if self.level != "light" else 8
         if len(password) < min_len:
             return [f"Пароль должен содержать минимум {min_len} символов"]
         return []
 
-    def _check_characters(self, password: str):
+    def _check_characters(self, password: str) -> list[str]:
+        """
+        Проверяет наличие букв, цифр и, для уровней medium/strong, спецсимволов.
+        Для уровня strong дополнительно проверяет наличие строчных и заглавных букв.
+
+        Args:
+            password: Пароль для проверки.
+
+        Returns:
+            Список ошибок, если пароль не содержит требуемые символы, иначе пустой список.
+        """
         errors = []
         if not re.search(r"[A-Za-z]", password):
             errors.append("Пароль должен содержать хотя бы одну букву")
@@ -65,7 +110,18 @@ class PasswordValidator:
 
         return errors
 
-    def _check_similarity(self, password: str, email: str):
+    def _check_similarity(self, password: str, email: str) -> list[str]:
+        """
+        Проверяет, не слишком ли пароль похож на email пользователя.
+        Использует SequenceMatcher для оценки схожести строк (порог 0.7).
+
+        Args:
+            password: Пароль для проверки.
+            email: Email пользователя для сравнения.
+
+        Returns:
+            Список ошибок, если пароль совпадает или слишком похож на email, иначе пустой список.
+        """
         errors = []
         password = password.lower()
 
@@ -89,7 +145,16 @@ class PasswordValidator:
 
         return errors
 
-    def _check_common_password(self, password: str):
+    def _check_common_password(self, password: str) -> list[str]:
+        """
+        Проверяет, не является ли пароль распространённым.
+
+        Args:
+            password: Пароль для проверки.
+
+        Returns:
+            Список ошибок, если пароль найден в списке распространённых, иначе пустой список.
+        """
         if password in self._common_passwords:
             return ["Пароль слишком распространен"]
         return []

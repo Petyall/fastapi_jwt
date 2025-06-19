@@ -36,6 +36,22 @@ router = APIRouter(prefix="/auth", tags=["Модуль авторизации п
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("2/minute")
 async def user_registration(request: Request, user_data: UserCreateRequest, background_tasks: BackgroundTasks) -> MessageResponse:
+    """
+    Регистрирует нового пользователя и отправляет письмо для подтверждения email (если ENABLE_EMAIL_CONFIRMATION включено в .env).
+
+    Args:
+        request: HTTP-запрос для контекста лимитера.
+        user_data: Данные для создания пользователя.
+        background_tasks: Объект для выполнения фоновой задачи отправки email.
+
+    Returns:
+        Сообщение об успешной регистрации с указанием на необходимость подтверждения email (если ENABLE_EMAIL_CONFIRMATION включено в .env).
+
+    Raises:
+        UserAlreadyExistsException: Если пользователь с указанным email уже существует.
+        PasswordValidationErrorException: Если пароль не соответствует требованиям валидации.
+        InternalServerErrorException: Если произошла ошибка при создании пользователя.
+    """
     check_user_existing = await UserRepository.find_one_or_none(email=user_data.email)
     if check_user_existing:
         raise UserAlreadyExistsException(user_data.email)
@@ -103,6 +119,19 @@ async def user_registration(request: Request, user_data: UserCreateRequest, back
 @router.post("/login", response_model=AuthResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 async def user_login(request: Request, user_data: UserLoginRequest) -> AuthResponse:
+    """
+    Аутентифицирует пользователя и устанавливает токены доступа и обновления в cookies.
+
+    Args:
+        request: HTTP-запрос для контекста лимитера.
+        user_data: Учетные данные пользователя (email и пароль).
+
+    Returns:
+        Ответ с сообщением об успешном входе и email пользователя, с токенами в cookies.
+
+    Raises:
+        InvalidCredentialsException: Если email или пароль неверны.
+    """
     user = await UserRepository.find_one_or_none(email=user_data.email)
     if not user or not PasswordHandler.verify_password(user_data.password, user.password):
         raise InvalidCredentialsException
@@ -122,6 +151,19 @@ async def user_login(request: Request, user_data: UserLoginRequest) -> AuthRespo
 
 @router.post("/logout", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 async def logout(refresh_token: str = Depends(get_refresh_token)) -> MessageResponse:
+    """
+    Выполняет выход пользователя, отзывая refresh-токен и удаляя cookies.
+
+    Args:
+        refresh_token: Refresh-токен, полученный из зависимости.
+
+    Returns:
+        Сообщение об успешном выходе.
+
+    Raises:
+        RefreshTokenNotFoundException: Если refresh-токен отсутствует.
+        InvalidRefreshTokenException: Если refresh-токен недействителен.
+    """
     if not refresh_token:
         raise RefreshTokenNotFoundException
 
@@ -148,6 +190,20 @@ async def logout(refresh_token: str = Depends(get_refresh_token)) -> MessageResp
 @router.post("/refresh", response_model=RefreshTokenResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("10/minute")
 async def refresh_token(request: Request, refresh_token: str = Depends(get_refresh_token)) -> RefreshTokenResponse:
+    """
+    Обновляет токены доступа и обновления, отзывая старый refresh-токен.
+
+    Args:
+        request: HTTP-запрос для контекста лимитера.
+        refresh_token: Refresh-токен, полученный из зависимости.
+
+    Returns:
+        Ответ с сообщением об успешном обновлении токенов и email пользователя, с новыми токенами в cookies.
+
+    Raises:
+        RefreshTokenNotFoundException: Если refresh-токен отсутствует.
+        InvalidRefreshTokenException: Если refresh-токен недействителен, отозван или истёк.
+    """
     if not refresh_token:
         raise RefreshTokenNotFoundException
 
@@ -181,6 +237,20 @@ async def refresh_token(request: Request, refresh_token: str = Depends(get_refre
 @router.post("/forgot-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("2/minute")
 async def forgot_password(request: Request, data: ForgotPasswordRequest, background_tasks: BackgroundTasks) -> MessageResponse:
+    """
+    Инициирует процесс сброса пароля, отправляя письмо с токеном сброса, если пользователь существует.
+
+    Args:
+        request: HTTP-запрос для контекста лимитера.
+        data: Данные запроса, содержащие email пользователя.
+        background_tasks: Объект для выполнения фоновых задач, таких как отправка email.
+
+    Returns:
+        Сообщение о том, что письмо отправлено, если пользователь существует.
+
+    Notes:
+        Для безопасности возвращает одинаковое сообщение независимо от существования пользователя.
+    """
     user = await UserRepository.find_one_or_none(email=data.email)
     if user:
         password_reset_token = await jwt_handler.create_reset_token(subject=user.email)
@@ -192,6 +262,16 @@ async def forgot_password(request: Request, data: ForgotPasswordRequest, backgro
         )
 
         async def send_password_reset_email(email: str, token: str):
+            """
+            Фоновая задача для отправки письма сброса пароля.
+
+            Args:
+                email: Адрес email пользователя.
+                token: Токен сброса пароля.
+
+            Notes:
+                Логирует ошибки отправки без прерывания основного процесса.
+            """
             try:
                 link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
                 html_content = email_handler.render_template(
@@ -210,6 +290,21 @@ async def forgot_password(request: Request, data: ForgotPasswordRequest, backgro
 @router.post("/reset-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 async def reset_password(request: Request, data: ResetPasswordRequest) -> MessageResponse:
+    """
+    Сбрасывает пароль пользователя по предоставленному токену.
+
+    Args:
+        request: HTTP-запрос для контекста лимитера.
+        data: Данные запроса, содержащие токен сброса и новый пароль.
+
+    Returns:
+        Сообщение об успешном изменении пароля.
+
+    Raises:
+        InvalidPasswordResetTokenException: Если токен сброса недействителен или пользователь не найден.
+        PasswordIdenticalToPreviousException: Если новый пароль совпадает со старым.
+        PasswordValidationErrorException: Если новый пароль не соответствует требованиям валидации.
+    """
     payload = await jwt_handler.decode_token(data.token)
     email = payload.get("sub")
     if not email:
@@ -234,4 +329,13 @@ async def reset_password(request: Request, data: ResetPasswordRequest) -> Messag
 
 @router.get("/check")
 async def check_admin(user=Depends(get_current_admin_user)):
+    """
+    Проверяет, является ли текущий пользователь администратором.
+
+    Args:
+        user: Текущий пользователь, полученный через зависимость.
+
+    Returns:
+        Данные текущего пользователя, если он администратор.
+    """
     return user

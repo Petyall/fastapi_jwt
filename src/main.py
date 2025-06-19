@@ -11,18 +11,33 @@ from src.email.router import router as email_router
 from src.limits.limiter import limiter, rate_limit_exceeded_handler
 
 
+# Контекстный менеджер для управления жизненным циклом приложения
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Управляет подключением и отключением ресурсов приложения.
+    При завершении работы приложения освобождает соединение с базой данных.
+    """
     yield
     await engine.dispose()
 
+
+# Инициализация приложения FastAPI
 app = FastAPI(lifespan=lifespan)
 
+
+# Подключение роутеров
 app.include_router(auth_router)
 app.include_router(email_router)
 
+
 @app.exception_handler(ProjectException)
 async def project_exception_handler(request: Request, exc: ProjectException):
+    """
+    Обрабатывает исключения типа ProjectException.
+    Логирует ошибку, если она не предназначена для клиента.
+    Возвращает JSON-ответ с деталями ошибки или общим сообщением.
+    """
     if not exc.expose_to_client:
         logger.error(
             f"{request.method} {request.url} — {type(exc).__name__}: {exc.detail}"
@@ -30,8 +45,12 @@ async def project_exception_handler(request: Request, exc: ProjectException):
 
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": exc.detail if exc.expose_to_client else "Ошибка на сервере. Попробуйте позже."}
+        content={
+            "error": exc.detail if exc.expose_to_client else "Ошибка на сервере. Попробуйте позже."
+        }
     )
 
+
+# Настройка лимитера запросов
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
