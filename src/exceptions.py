@@ -18,14 +18,14 @@ class UserAlreadyExistsException(ProjectException):
     status_code = status.HTTP_409_CONFLICT
 
     def __init__(self, user_email: str):
-        super().__init__(detail="Пользователь уже зарегистрирован")
+        super().__init__(detail=f"Пользователь {user_email} уже зарегистрирован")
 
 
 class UserNotFoundException(ProjectException):
     status_code = status.HTTP_404_NOT_FOUND
 
     def __init__(self, user_email: str):
-        super().__init__(detail="Пользователь не найден")
+        super().__init__(detail=f"Пользователь {user_email} не найден")
 
 
 class UserHasNoRightsException(ProjectException):
@@ -38,7 +38,7 @@ class PasswordValidationErrorException(ProjectException):
     status_code = status.HTTP_400_BAD_REQUEST
 
     def __init__(self, validation_result: str):
-        super().__init__(detail="Пароль не соответствует требованиям")
+        super().__init__(detail=f"Пароль не соответствует требованиям:\n{validation_result}")
 
 
 class PasswordIdenticalToPreviousException(ProjectException):

@@ -75,7 +75,7 @@ async def get_current_user(token: str = Depends(get_access_token)) -> User:
 
     user = await UserRepository.find_one_or_none(email=email)
     if not user:
-        raise UserNotFoundException
+        raise UserNotFoundException(email)
 
     return user
 

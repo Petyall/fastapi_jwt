@@ -8,6 +8,7 @@ from src.logs.logger import logger
 from src.exceptions import ProjectException
 from src.auth.router import router as auth_router
 from src.email.router import router as email_router
+from src.users.router import router as users_router
 from src.limits.limiter import limiter, rate_limit_exceeded_handler
 
 
@@ -29,6 +30,7 @@ app = FastAPI(lifespan=lifespan)
 # Подключение роутеров
 app.include_router(auth_router)
 app.include_router(email_router)
+app.include_router(users_router)
 
 
 @app.exception_handler(ProjectException)
