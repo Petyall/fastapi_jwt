@@ -10,9 +10,9 @@ from src.logs.logger import logger
 from src.limits.limiter import limiter
 from src.auth.constants import UserRole
 from src.auth.utils.jwt_handler import jwt_handler
-from src.auth.utils.cookie_handler import CookieHandler
+from src.auth.utils.cookie_handler import cookie_handler
 from src.auth.utils.password_validator import validator
-from src.auth.utils.password_handler import PasswordHandler
+from src.auth.utils.password_handler import password_handler
 from src.auth.services import RefreshTokenRepository, UserRepository
 from src.email.utils.email_handler import email_handler
 from src.auth.dependencies import get_current_admin_user, get_refresh_token
@@ -60,7 +60,7 @@ async def user_registration(request: Request, user_data: UserCreateRequest, back
     if validation_result is not True:
         raise PasswordValidationErrorException(validation_result)
 
-    hashed_password = PasswordHandler.hash_password(user_data.password)
+    hashed_password = password_handler.hash_password(user_data.password) 
 
     email_confirmed = True
     confirmation_token = None
@@ -133,7 +133,7 @@ async def user_login(request: Request, user_data: UserLoginRequest) -> AuthRespo
         InvalidCredentialsException: Если email или пароль неверны.
     """
     user = await UserRepository.find_one_or_none(email=user_data.email)
-    if not user or not PasswordHandler.verify_password(user_data.password, user.password):
+    if not user or not password_handler.verify_password(user_data.password, user.password):
         raise InvalidCredentialsException
 
     access_token = await jwt_handler.create_access_token(subject=user.email)
@@ -144,7 +144,7 @@ async def user_login(request: Request, user_data: UserLoginRequest) -> AuthRespo
         content=AuthResponse(message="Успешный вход", user=user.email).dict()
     )
 
-    CookieHandler.set_auth_tokens(response, access_token, refresh_token)
+    cookie_handler.set_auth_tokens(response, access_token, refresh_token)
 
     return response
 
@@ -229,7 +229,7 @@ async def refresh_token(request: Request, refresh_token: str = Depends(get_refre
         content=RefreshTokenResponse(message="Токены обновлены", user=email).dict()
     )
 
-    CookieHandler.set_auth_tokens(response, new_access_token, new_refresh_token)
+    cookie_handler.set_auth_tokens(response, new_access_token, new_refresh_token)
 
     return response
 
@@ -314,14 +314,14 @@ async def reset_password(request: Request, data: ResetPasswordRequest) -> Messag
     if not user:
         raise InvalidPasswordResetTokenException
 
-    if PasswordHandler.verify_password(data.new_password, user.password):
+    if password_handler.verify_password(data.new_password, user.password):
         raise PasswordIdenticalToPreviousException
 
     validation_result = validator.validate(password=data.new_password, email=user.email)
     if validation_result is not True:
         raise PasswordValidationErrorException(validation_result)
 
-    new_hashed = PasswordHandler.hash_password(data.new_password)
+    new_hashed = password_handler.hash_password(data.new_password)
     await UserRepository.update(id=user.id, password=new_hashed, password_reset_token=None, password_reset_token_created_at=None)
 
     return MessageResponse(message="Пароль успешно изменён")

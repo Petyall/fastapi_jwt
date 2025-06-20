@@ -1,4 +1,5 @@
 import bcrypt
+from src.config import settings
 
 
 class PasswordHandler:
@@ -8,8 +9,10 @@ class PasswordHandler:
     Предоставляет методы для хеширования паролей и проверки их соответствия хешу.
     """
 
-    @staticmethod
-    def hash_password(password: str) -> str:
+    def __init__(self, salt_rounds: int = settings.PASSWORD_BCRYPT_SALT_ROUNDS):
+        self.salt_rounds = salt_rounds
+
+    def hash_password(self, password: str) -> str:
         """
         Хеширует пароль с использованием bcrypt.
 
@@ -19,12 +22,11 @@ class PasswordHandler:
         Returns:
             Хешированный пароль в виде строки (декодированный из байтов).
         """
-        salt = bcrypt.gensalt()
+        salt = bcrypt.gensalt(rounds=self.salt_rounds)
         hashed_password = bcrypt.hashpw(password.encode("utf-8"), salt)
         return hashed_password.decode("utf-8")
 
-    @staticmethod
-    def verify_password(password: str, hashed_password: str) -> bool:
+    def verify_password(self, password: str, hashed_password: str) -> bool:
         """
         Проверяет соответствие пароля его хешу.
 
@@ -36,3 +38,5 @@ class PasswordHandler:
             True, если пароль соответствует хешу, иначе False.
         """
         return bcrypt.checkpw(password.encode("utf-8"), hashed_password.encode("utf-8"))
+
+password_handler = PasswordHandler()

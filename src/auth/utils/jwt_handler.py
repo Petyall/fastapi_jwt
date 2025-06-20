@@ -14,20 +14,6 @@ from src.exceptions import (
 )
 
 
-# Загрузка приватного и публичного ключей шифрования из файлов
-PRIVATE_KEY_PATH = Path(settings.JWT_PRIVATE_KEY_PATH)
-PRIVATE_KEY = PRIVATE_KEY_PATH.read_text()
-
-PUBLIC_KEY_PATH = Path(settings.JWT_PUBLIC_KEY_PATH)
-PUBLIC_KEY = PUBLIC_KEY_PATH.read_text()
-
-# Конфигурация JWT из настроек приложения
-ALGORITHM = settings.JWT_ALGORITHM
-ACCESS_TOKEN_EXPIRE_MINUTES = settings.JWT_ACCESS_TOKEN_EXPIRE
-REFRESH_TOKEN_EXPIRE_DAYS = settings.JWT_REFRESH_TOKEN_EXPIRE
-RESET_TOKEN_EXPIRE_MINUTES = settings.JWT_RESET_TOKEN_EXPIRE
-
-
 class JWTHandler:
     """
     Класс для создания и проверки JWT-токенов.
@@ -35,6 +21,17 @@ class JWTHandler:
     Использует приватный и публичный ключи для подписи и верификации токенов.
     Поддерживает создание access-токенов, refresh-токенов и токенов сброса пароля.
     """
+
+    def __init__(self):
+        # Загрузка приватного и публичного ключей шифрования из файлов
+        self.private_key = Path(settings.JWT_PRIVATE_KEY_PATH).read_text()
+        self.public_key = Path(settings.JWT_PUBLIC_KEY_PATH).read_text()
+
+        # Конфигурация JWT из настроек приложения
+        self.algorithm = settings.JWT_ALGORITHM
+        self.access_token_exp = settings.JWT_ACCESS_TOKEN_EXPIRE
+        self.refresh_token_exp = settings.JWT_REFRESH_TOKEN_EXPIRE
+        self.reset_token_exp = settings.JWT_RESET_TOKEN_EXPIRE
 
     async def create_access_token(self, subject: EmailStr) -> str:
         """
@@ -46,7 +43,7 @@ class JWTHandler:
         Returns:
             Подписанный JWT access-токен в виде строки.
         """
-        token, _, _ = await self._create_token(subject, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+        token, _, _ = await self._create_token(subject, timedelta(minutes=self.access_token_exp))
         return token
 
     async def create_refresh_token(self, subject: str) -> str:
@@ -59,7 +56,7 @@ class JWTHandler:
         Returns:
             Подписанный JWT refresh-токен в виде строки.
         """
-        token, jti, expires_at = await self._create_token(subject, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+        token, jti, expires_at = await self._create_token(subject, timedelta(days=self.refresh_token_exp))
         await RefreshTokenRepository.add(jti=jti, email=subject, expires_at=expires_at)
         return token
 
@@ -73,7 +70,7 @@ class JWTHandler:
         Returns:
             Подписанный JWT токен сброса пароля в виде строки.
         """
-        token, _, _ = await self._create_token(subject, timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES))
+        token, _, _ = await self._create_token(subject, timedelta(minutes=self.reset_token_exp))
         return token
 
     async def _create_token(self, email: str, expires_delta: timedelta) -> tuple[str, str, datetime]:
@@ -106,7 +103,7 @@ class JWTHandler:
             "jti": jti,
         }
 
-        token = jwt.encode(payload, PRIVATE_KEY, algorithm=ALGORITHM)
+        token = jwt.encode(payload, self.private_key, algorithm=self.algorithm)
         return token, jti, expire
 
     async def decode_token(self, token: str) -> dict:
@@ -124,7 +121,7 @@ class JWTHandler:
             InvalidTokenException: Если токен недействителен или не может быть декодирован.
         """
         try:
-            payload = jwt.decode(token, PUBLIC_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, self.public_key, algorithms=[self.algorithm])
             return payload
         except jwt.ExpiredSignatureError:
             raise ExpiredTokenException

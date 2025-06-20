@@ -1,8 +1,8 @@
 import socket
-from email.mime.text import MIMEText
 
-from aiosmtplib import SMTP, SMTPAuthenticationError, SMTPConnectError, SMTPException
+from email.mime.text import MIMEText
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from aiosmtplib import SMTP, SMTPAuthenticationError, SMTPConnectError, SMTPException
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from src.config import settings
@@ -15,8 +15,25 @@ class EmailHandler:
 
     Использует aiosmtplib для асинхронной отправки email и Jinja2 для рендеринга HTML-шаблонов.
     """
-    def __init__(self) -> None:
-        self.env = Environment(loader=FileSystemLoader(settings.EMAIL_TEMPLATES), autoescape=select_autoescape(["html", "xml"]))
+
+    def __init__(
+        self,
+        smtp_host: str = settings.SMTP_HOST,
+        smtp_port: int = settings.SMTP_PORT,
+        smtp_username: str = settings.SMTP_USERNAME,
+        smtp_password: str = settings.SMTP_PASSWORD,
+        email_from: str = settings.EMAIL_FROM,
+        template_path: str = settings.EMAIL_TEMPLATES,
+    ) -> None:
+        self.smtp_host = smtp_host
+        self.smtp_port = smtp_port
+        self.smtp_username = smtp_username
+        self.smtp_password = smtp_password
+        self.email_from = email_from
+        self.env = Environment(
+            loader=FileSystemLoader(template_path),
+            autoescape=select_autoescape(["html", "xml"])
+        )
 
     @retry(
         stop=stop_after_attempt(3),
@@ -24,7 +41,6 @@ class EmailHandler:
         retry=retry_if_exception_type((SMTPException, socket.gaierror, TimeoutError, ConnectionRefusedError)),
         reraise=True
     )
-
     async def send_email(self, to: str, subject: str, html_content: str) -> None:
         """
         Асинхронно отправляет email-сообщение с использованием SMTP.
@@ -46,18 +62,18 @@ class EmailHandler:
         """
         msg = MIMEText(html_content, "html")
         msg["Subject"] = subject
-        msg["From"] = settings.EMAIL_FROM
+        msg["From"] = self.email_from
         msg["To"] = to
 
         try:
             smtp = SMTP(
-                hostname=settings.SMTP_HOST,
-                port=settings.SMTP_PORT,
+                hostname=self.smtp_host,
+                port=self.smtp_port,
                 timeout=10,
                 start_tls=True
             )
             await smtp.connect()
-            await smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+            await smtp.login(self.smtp_username, self.smtp_password)
             await smtp.send_message(msg)
             await smtp.quit()
         except SMTPAuthenticationError as e:

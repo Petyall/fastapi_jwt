@@ -9,8 +9,11 @@ class CookieHandler:
     Предоставляет методы для безопасной установки access- и refresh-токенов в HTTP-ответ.
     """
 
-    @staticmethod
-    def set_auth_tokens(response: JSONResponse, access_token: str, refresh_token: str) -> None:
+    def __init__(self, access_token_expire: int = settings.JWT_ACCESS_TOKEN_EXPIRE, refresh_token_expire: int = settings.JWT_REFRESH_TOKEN_EXPIRE):
+        self.access_token_expire = access_token_expire
+        self.refresh_token_expire = refresh_token_expire
+
+    def set_auth_tokens(self, response: JSONResponse, access_token: str, refresh_token: str) -> None:
         """
         Устанавливает access и refresh-токены в cookies ответа.
         Токены устанавливаются с флагами httponly, secure и samesite для повышения безопасности.
@@ -27,7 +30,7 @@ class CookieHandler:
             httponly=True,
             secure=True,
             samesite="Lax",
-            max_age=settings.JWT_ACCESS_TOKEN_EXPIRE * 60,
+            max_age=self.access_token_expire * 60,
         )
         response.set_cookie(
             key="refresh_token",
@@ -35,5 +38,7 @@ class CookieHandler:
             httponly=True,
             secure=True,
             samesite="Lax",
-            max_age=settings.JWT_REFRESH_TOKEN_EXPIRE * 60 * 60 * 24,
+            max_age=self.refresh_token_expire * 60 * 60 * 24,
         )
+
+cookie_handler = CookieHandler()

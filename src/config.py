@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # --- Пароли ---
     PASSWORD_VALIDATION_LEVEL: Literal["none", "light", "medium", "strong"]  # Уровень строгости валидации паролей
     PASSWORDS_COMMON_LIST_PATH: str  # Путь к файлу со списком часто используемых паролей
+    PASSWORD_BCRYPT_SALT_ROUNDS: int # Количество раундов при генерации соли для шифрования пароля
 
     # --- База данных ---
     DB_TYPE: str  # Тип базы данных (например, postgresql или sqlite)
